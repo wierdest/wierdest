@@ -1,0 +1,7 @@
+#!/usr/bin/env node
+
+const app = require('../app');
+const debug = require('debug')('wierdest:server');
+
+// Nothing to do here, as server and WebSocket setup is in app.js
+debug('Server is configured in app.js');
