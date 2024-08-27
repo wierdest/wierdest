@@ -1,38 +1,35 @@
 #!/usr/bin/env node
-
-// esse arquivo é gerado automaticamente, modifiquei para incluir o server side websocket aqui
-// de primeira fiz no app.js, mas passei para cá pq no app.js vc quer deixar o Middleware
 const app = require('../app');
 const debug = require('debug')('wierdest:server');
 const http = require('http');
-const { WebSocketServer } = require('ws');
+const { Server } = require('socket.io');
 const uuid = require('uuid');
 
 // Create HTTP server
 const server = http.createServer(app);
 
-// Create the WebSocket server
-const wss = new WebSocketServer({ noServer: true });
-
-server.on('upgrade', function(request, socket, head) {
-  wss.handleUpgrade(request, socket, head, function(ws) {
-    const userId = uuid.v4();
-    ws.userId = userId;
-
-    console.log('User connected with ID ', userId);
-
-    wss.emit('connection', ws, request);
-  });
+// Create the Socket.IO server
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow all origins (adjust as needed for security)
+    methods: ["GET", "POST"]
+  }
 });
 
-wss.on('connection', function(ws) {
-  ws.send(JSON.stringify({ type: 'init', userId: ws.userId }));
-  ws.on('message', function(message) {
-    console.log(`Received message ${message} from user ${ws.userId}`);
+io.on('connection', (socket) => {
+  const userId = uuid.v4();
+  console.log('User connected with ID ', userId);
+
+  // Send 'init' event with userId
+  socket.emit('init', { userId });
+
+  // Listen for 'pos' events from clients
+  socket.on('pos', (data) => {
+    io.emit('draw', { userId, pos: data });
   });
 
-  ws.on('close', function() {
-    console.log(`User ${ws.userId} disconnected`);
+  socket.on('disconnect', () => {
+    console.log(`User ${userId} disconnected`);
   });
 });
 

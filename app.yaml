@@ -1,0 +1,10 @@
+runtime: nodejs22
+
+env: standard
+
+manual_scaling:
+  instances: 1
+
+network:
+  session_affinity: true
+
