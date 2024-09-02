@@ -16,22 +16,80 @@ const io = new Server(server, {
   }
 });
 
+// Initialize an empty object to store player data
+const players = {};
+
+// Array to store the "bullets"
+const projectiles = [];
+
+const projectileSpeed = 5;
+
+function moveAndCleanProjectiles() {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const proj = projectiles[i];
+    proj.pos.x += Math.cos(proj.rotation) * projectileSpeed;
+    proj.pos.y += Math.sin(proj.rotation) * projectileSpeed;
+
+    // Hardcoded the canvas size! todo fix this
+    if (proj.pos.x < 0 || proj.pos.x > 600 || proj.pos.y < 0 || proj.pos.y > 500) {
+      projectiles.splice(i, 1); // Remove the projectile
+    }
+  }
+}
+
 io.on('connection', (socket) => {
+  // Generate a unique user ID
   const userId = uuid.v4();
-  console.log('User connected with ID ', userId);
+  console.log('User connected with ID', userId);
 
   // Send 'init' event with userId
+  // do we really need to emit this?
   socket.emit('init', { userId });
 
-  // Listen for 'pos' events from clients
-  socket.on('pos', (data) => {
-    io.emit('draw', { userId, pos: data });
+  // Initialize player data for the new connection
+  players[userId] = { pos: { x: 0, y: 0 }, rotation: 0 };
+
+  // Broadcast current player data to the new connection
+  io.emit('updatePlayers', players);
+
+  // Broadcast current projectiles data to the new connection
+  io.emit('updateProjectiles', projectiles);
+
+  // Listen for 'update' events from clients
+  socket.on('update', (data) => {
+    if (players[userId]) {
+      players[userId].pos = data.pos;
+      players[userId].rotation = data.rotation; 
+      io.emit('updatePlayers', players); // Broadcast updated player data to all clients
+    }
   });
 
+  // Listen to 'fire' events 
+  socket.on('fire', (proj) => {
+    // console.log('received fire event ', proj)
+    projectiles.push({ ...proj, id: uuid.v4(), ownerId: userId });
+    io.emit('updateProjectiles', projectiles);
+  });
+
+  // Handle user disconnection
   socket.on('disconnect', () => {
     console.log(`User ${userId} disconnected`);
+    delete players[userId]; 
+    io.emit('updatePlayers', players);
+
+    const filteredProjectiles = projectiles.filter(proj => proj.ownerId !== userId);
+    // Update the original array
+    projectiles.length = 0; // Clear the array
+    projectiles.push(...filteredProjectiles);
+    io.emit('updateProjectiles', projectiles);
   });
 });
+
+// Server side game loop 
+setInterval(() => {
+  moveAndCleanProjectiles(); 
+  io.emit('updateProjectiles', projectiles); // Broadcast updated projectiles to all clients
+}, 1000 / 60); // 60 fps lol !
 
 // Start the server
 server.listen(process.env.PORT || 3000, () => {

@@ -1,8 +1,35 @@
+/* styles.css */
 body {
-  padding: 50px;
-  font: 14px "Lucida Grande", Helvetica, Arial, sans-serif;
+  font-family: 'Roboto', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background-color: #2d3748;
+}
+
+h1 {
+  color: #ffffff;
+  margin: 0;
+  font-size: 1.875rem;
+  font-weight: bold;
+}
+
+nav {
+  display: flex;
+  gap: 16px;
 }
 
 a {
-  color: #00B7FF;
+  color: #ffffff;
+  text-decoration: none;
+}
+
+a:hover {
+  color: #e2e8f0;
 }

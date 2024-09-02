@@ -2,17 +2,15 @@ doctype html
 html
   head
     title= title
-    link(rel='stylesheet', href='/stylesheets/tailwind.css')
+    link(rel='stylesheet', href='https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap')
+    link(rel='stylesheet', href='/stylesheets/style.css')
   body
-    header(class='bg-gray-800 p-4')
-      div(class='container mx-auto flex justify-between items-center')
-        h1(class='text-white text-3xl font-bold')= title
-        nav
-          ul(class="flex space-x-4")
-            li
-              a(class='text-white hover:text-gray-300', href='/projects') Projects
-            li
-              a(class='text-white hover:text-gray-300', href='/about') About
+    header
+      h1= title
+      nav
+        a(href='/projects') Projects
+        a(href='/about') About
+
     p(id='status')
-              
-  block content
+
+    block content
