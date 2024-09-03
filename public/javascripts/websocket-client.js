@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	let myId = undefined;
 	const positions = {};
 	const rotations = {};
+	// Array to store the bullets
 	const projectiles = [];
 	const renderer = new GameRenderer(ctx, canvasElement.width, canvasElement.height);
 
@@ -20,7 +21,16 @@ document.addEventListener('DOMContentLoaded', () => {
 	});
 
 	socket.on('updatePlayers', (data) => {
-		// Update positions and rotations from server data
+		
+		// sync the positions with the players that are really there
+		Object.keys(positions).forEach(userId => {
+			if (!data[userId]) {
+			  delete positions[userId];
+			  delete rotations[userId];
+			}
+		});
+
+		// apply the date to positions and rotations
 		Object.keys(data).forEach(userId => {
 			positions[userId] = data[userId].pos;
 			rotations[userId] = data[userId].rotation;
@@ -37,6 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		const rect = canvasElement.getBoundingClientRect();
 		const x = event.clientX - rect.left;
 		const y = event.clientY - rect.top;
+		// Emite o signal de update para o server atualizar a posição do jogador no objeto players
 		socket.emit('update', { pos: { x, y }, rotation: rotationAngle });
 		rotationAngle += rotationSpeed;
 	});

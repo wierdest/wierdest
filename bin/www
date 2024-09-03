@@ -19,6 +19,14 @@ const io = new Server(server, {
 // Initialize an empty object to store player data
 const players = {};
 
+// Hard-coded player radius, should come from client, right?
+const playerRadius = 10;
+
+// Hard-coded width and height, same as player
+const boardWidth = 600;
+const boardHeight = 500;
+
+
 // Array to store the "bullets"
 const projectiles = [];
 
@@ -31,12 +39,93 @@ function moveAndCleanProjectiles() {
     proj.pos.y += Math.sin(proj.rotation) * projectileSpeed;
 
     // Hardcoded the canvas size! todo fix this
-    if (proj.pos.x < 0 || proj.pos.x > 600 || proj.pos.y < 0 || proj.pos.y > 500) {
+    if (proj.pos.x < 0 || proj.pos.x > boardWidth || proj.pos.y < 0 || proj.pos.y > boardHeight) {
       projectiles.splice(i, 1); // Remove the projectile
     }
   }
 }
 
+function dealWithDeaths() {
+  // Checks and deals with deaths by collision with bullets 
+  // Iterate over the projectiles, from the last to the first 
+  for(let i = projectiles.length - 1; i >= 0; i--) {
+    // Get a projectile
+    const proj = projectiles[i];
+    const projOwner = proj.ownerId;
+
+    // Iterate over the players
+    Object.keys(players).forEach(playerId => {
+      // Select a player
+      const player = players[playerId];
+      
+      // Measure distance between player and projectile
+      const distance = Math.hypot(proj.pos.x - player.pos.x, proj.pos.y - player.pos.y);
+
+      // Poderia usar a formula euclidiana, mas acho que  Math.hypot parece mais performático?
+      // Raiz quadrada de (x2 - x1) ao quadrado + (y2 - y1) ao quadrado
+      // const distance = Math.sqrt(
+      //   Math.pow(proj.pos.x - player.pos.x, 2) + Math.pow(proj.pos.y - player.pos.y, 2)
+      // );
+
+      // Check if a distancia entre esses pontos é menor do que o player
+      if(distance < playerRadius) {
+        if(projOwner === playerId) {
+          // Player got hit by their own bullet
+          console.log(`Player ${playerId} committed suicide`);
+          io.emit('suicide', { playerId });
+        } else {
+          console.log(`Player ${playerId} was killed by ${projOwner}`);
+          io.emit('killed', { killedId: playerId, killerId: projOwner });
+        }
+
+        // Remove o projetil
+        projectiles.splice(i, 1);
+        // creio que não precise emitir o array, já que é feito no loop
+        // io.emit('updateProjectiles', projectiles);
+
+      }
+    })
+  }
+}
+
+function dealWithPlayerCollisions() {
+  // Checks player to player collision
+  const playerIds = Object.keys(players);
+  // Iterate over the players in a 2d loop
+  for(let i = 0; i < playerIds.length; i++) {
+
+    for(let j = i + 1; j < playerIds.length; j++) {
+      // Get player A and player B
+      const playerA = players[playerIds[i]];
+      const playerB = players[playerIds[j]];
+
+      const distance = Math.hypot(
+        playerA.pos.x - playerB.pos.x,
+        playerA.pos.y - playerB.pos.y
+      );
+
+      // Hardcoded player radius
+
+      if(distance < playerRadius * 2) {
+        // Detected collision   
+        // Previne que um jogador fique por cima do outro (overlap), atualizando a posição
+        const overlap = (playerRadius * 2) - distance;
+
+        // Calculate displacement to resolve the collision
+        const dx = (playerB.pos.x - playerA.pos.x) / distance;
+        const dy = (playerB.pos.y - playerA.pos.y) / distance;
+
+        // Adjust positions to resolve collision
+        playerA.pos.x -= dx * overlap / 2;
+        playerA.pos.y -= dy * overlap / 2;
+        playerB.pos.x += dx * overlap / 2;
+        playerB.pos.y += dy * overlap / 2;
+      }
+    }
+  }
+}
+
+// Game Init
 io.on('connection', (socket) => {
   // Generate a unique user ID
   const userId = uuid.v4();
@@ -79,15 +168,18 @@ io.on('connection', (socket) => {
 
     const filteredProjectiles = projectiles.filter(proj => proj.ownerId !== userId);
     // Update the original array
-    projectiles.length = 0; // Clear the array
+    projectiles.length = 0;
     projectiles.push(...filteredProjectiles);
     io.emit('updateProjectiles', projectiles);
   });
 });
 
-// Server side game loop 
+
+// Server side Game Loop 
 setInterval(() => {
-  moveAndCleanProjectiles(); 
+  dealWithPlayerCollisions();
+  moveAndCleanProjectiles();
+  dealWithDeaths();
   io.emit('updateProjectiles', projectiles); // Broadcast updated projectiles to all clients
 }, 1000 / 60); // 60 fps lol !
 
