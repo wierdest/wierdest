@@ -50,6 +50,10 @@ document.addEventListener('DOMContentLoaded', () => {
 		// Emite o signal de update para o server atualizar a posição do jogador no objeto players
 		socket.emit('update', { pos: { x, y }, rotation: rotationAngle });
 		rotationAngle += rotationSpeed;
+
+		if (rotationAngle >= 2 * Math.PI) {
+			rotationAngle -= 2 * Math.PI; 
+		}
 	});
 
 	canvasElement.addEventListener('click', () => {
