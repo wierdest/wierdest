@@ -1,10 +1,14 @@
 extends layout
 
 block content
-    script(src="/socket.io/socket.io.js")
-    script(src="/javascripts/game-renderer.js")
-    script(src='/javascripts/websocket-client.js')
-
-    // Add a div to center the canvas
-    div(style="display: flex; justify-content: center; align-items: center; min-height: 80vh;")
-        canvas(id='board' style="background-color: gray;" width='600' height='500')
+    div(style="display: flex; justify-content: center; align-items: center; min-height: 80vh; flex-direction: column;")
+        p
+            | This is a top-down shooter game where precision and quick reflexes are key.
+            br
+            | Inspired by GoldenEye's Golden Gun rules, a single shot eliminates your enemies.
+            br
+            | The game offers two rooms: one for 1 vs 1 and another for 2 vs 2 battles.
+            br
+            | Players join a queue, with entry on a first come, first served basis.
+            
+        button(id="enterGameButton" type="button" onclick="location.href='/game/lobby'") Enter Game

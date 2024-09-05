@@ -16,6 +16,10 @@ const io = new Server(server, {
   }
 });
 
+// Namespaces @ https://socket.io/docs/v4/namespaces/
+const lobbyNamespace = io.of("/game//lobby");
+const gameNamespace = io.of("/game/play")
+
 // Initialize an empty object to store player data
 const players = {};
 
@@ -72,10 +76,10 @@ function dealWithDeaths() {
         if(projOwner === playerId) {
           // Player got hit by their own bullet
           console.log(`Player ${playerId} committed suicide`);
-          io.emit('suicide', { playerId });
+          gameNamespace.emit('suicide', { playerId });
         } else {
           console.log(`Player ${playerId} was killed by ${projOwner}`);
-          io.emit('killed', { killedId: playerId, killerId: projOwner });
+          gameNamespace.emit('killed', { killedId: playerId, killerId: projOwner });
         }
 
         // Remove o projetil
@@ -126,7 +130,7 @@ function dealWithPlayerCollisions() {
 }
 
 // Game Init
-io.on('connection', (socket) => {
+gameNamespace.on('connection', (socket) => {
   // Generate a unique user ID
   const userId = uuid.v4();
   console.log('User connected with ID', userId);
@@ -139,17 +143,17 @@ io.on('connection', (socket) => {
   players[userId] = { pos: { x: 0, y: 0 }, rotation: 0 };
 
   // Broadcast current player data to the new connection
-  io.emit('updatePlayers', players);
+  gameNamespace.emit('updatePlayers', players);
 
   // Broadcast current projectiles data to the new connection
-  io.emit('updateProjectiles', projectiles);
+  gameNamespace.emit('updateProjectiles', projectiles);
 
   // Listen for 'update' events from clients
   socket.on('update', (data) => {
     if (players[userId]) {
       players[userId].pos = data.pos;
       players[userId].rotation = data.rotation; 
-      io.emit('updatePlayers', players); // Broadcast updated player data to all clients
+      gameNamespace.emit('updatePlayers', players); // Broadcast updated player data to all clients
     }
   });
 
@@ -157,20 +161,20 @@ io.on('connection', (socket) => {
   socket.on('fire', (proj) => {
     // console.log('received fire event ', proj)
     projectiles.push({ ...proj, id: uuid.v4(), ownerId: userId });
-    io.emit('updateProjectiles', projectiles);
+    gameNamespace.emit('updateProjectiles', projectiles);
   });
 
   // Handle user disconnection
   socket.on('disconnect', () => {
     console.log(`User ${userId} disconnected`);
     delete players[userId]; 
-    io.emit('updatePlayers', players);
+    gameNamespace.emit('updatePlayers', players);
 
     const filteredProjectiles = projectiles.filter(proj => proj.ownerId !== userId);
     // Update the original array
     projectiles.length = 0;
     projectiles.push(...filteredProjectiles);
-    io.emit('updateProjectiles', projectiles);
+    gameNamespace.emit('updateProjectiles', projectiles);
   });
 });
 
@@ -180,7 +184,7 @@ setInterval(() => {
   dealWithPlayerCollisions();
   moveAndCleanProjectiles();
   dealWithDeaths();
-  io.emit('updateProjectiles', projectiles); // Broadcast updated projectiles to all clients
+  gameNamespace.emit('updateProjectiles', projectiles); // Broadcast updated projectiles to all clients
 }, 1000 / 60); // 60 fps lol !
 
 // Start the server

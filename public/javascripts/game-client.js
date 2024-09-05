@@ -2,7 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
 	const statusElement = document.getElementById('status');
 	const canvasElement = document.getElementById('board');
 	const ctx = canvasElement.getContext('2d');
-	const socket = io();
+	// Connect to our play Namespace
+	const socket = io("/game/play");
 
 	// Store game's working data in the client side
 	let myId = undefined;

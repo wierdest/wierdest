@@ -1,0 +1,14 @@
+extends layout
+
+block content
+    div(style="display: flex; justify-content: center; align-items: center; min-height: 80vh; flex-direction: column;")
+        p
+            | This is the lobby.
+            br
+            | There is going to be a list of players in the lobby, waiting to join either room.
+            br
+            | There is going to be selection of two rooms: one for 1 vs 1 and another for 2 vs 2 battles.
+            br
+            | Players are going to be ushered to the game, as it becomes available.
+            
+        button(id="enterGameButton" type="button" onclick="location.href='/game/play'") Enter Game
