@@ -1,0 +1,21 @@
+extends layout
+
+block content
+    script(src="/socket.io/socket.io.js")
+    script(src="/javascripts/game-renderer.js")
+    script(src='/javascripts/one-vs-one-client.js')
+
+    h2 1 vs 1
+    
+    p(id='status')
+
+    div(style="display: flex; flex-direction: row; justify-content: space-evenly; align-items: flex-start; min-height: 80vh;")
+        div(style="display: flex; flex-direction: column; justify-content: space-evenly; align-items: flex-start")
+            h3 Players in the game
+            ol(id='playersList')
+            h3 Spectators
+            ol(id='spectatorsList')
+        canvas(id='board' style="background-color: gray;" width='600' height='500')
+
+
+

@@ -4,8 +4,8 @@ const router = express.Router();
 router.get('/', function(req, res, next) {
 });
 
-router.get('/play', function(req, res, next) {
-  res.render('game', { title: 'wierdest' });
+router.get('/play/1vs1', function(req, res, next) {
+  res.render('one-vs-one', { title: 'wierdest' });
 });
 
 router.get('/lobby', function(req, res, next) {

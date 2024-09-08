@@ -4,7 +4,7 @@ const debug = require('debug')('wierdest:server');
 const http = require('http');
 const { Server } = require('socket.io');
 const uuid = require('uuid');
-
+const { startGameLoop, stopGameLoop } = require('./game-logic');
 // Create HTTP server
 const server = http.createServer(app);
 
@@ -12,148 +12,124 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "*", // Allow all origins (adjust as needed for security)
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true // Allow credentials (cookies)
   }
 });
 
+
 // Namespaces @ https://socket.io/docs/v4/namespaces/
-const lobbyNamespace = io.of("/game//lobby");
-const gameNamespace = io.of("/game/play")
+const lobbyNamespace = io.of("/game/lobby");
+const oneVsOneNamespace = io.of("/game/play/1vs1")
+const twoVsTwoNamespace = io.of("/game/play/2vs2")
+
+// store all the users in the lobby
+const userStore = {}
+// Lobby namespace
+lobbyNamespace.on('connection', (socket) => {
+  // Generate and store the user ID in the socket object
+  userId = uuid.v4();
+  userStore[userId] = socket;
+  updatePlayersList(); // Update the list of players
+  console.log(`Lobby user connected with ID ${userId}, socket ID ${socket.id}`);
+  // Send the userId to the client
+  socket.emit('lobbyInit', { userId });
+
+  socket.on('disconnect', () => {
+    console.log('Lobby user disconnected');
+    delete userStore[userId];
+    updatePlayersList(); // Update the list of players
+  });
+});
+
+function updatePlayersList() {
+  const players = Object.keys(userStore).map(userId => ({ userId }));
+  lobbyNamespace.emit('updatePlayersList', players);
+}
+
+// Game namespace initiation values
 
 // Initialize an empty object to store player data
-const players = {};
+const oneVsOnePlayers = {};
+const oneVsOneSpectators = {};
 
 // Hard-coded player radius, should come from client, right?
 const playerRadius = 10;
-
 // Hard-coded width and height, same as player
 const boardWidth = 600;
 const boardHeight = 500;
-
-
 // Array to store the "bullets"
 const projectiles = [];
 
-const projectileSpeed = 5;
+let activeOneVsOnePlayers = 0;
 
-function moveAndCleanProjectiles() {
-  for (let i = projectiles.length - 1; i >= 0; i--) {
-    const proj = projectiles[i];
-    proj.pos.x += Math.cos(proj.rotation) * projectileSpeed;
-    proj.pos.y += Math.sin(proj.rotation) * projectileSpeed;
+// One vs One Game Play Namespace
+oneVsOneNamespace.on('connection', (socket) => {
 
-    // Hardcoded the canvas size! todo fix this
-    if (proj.pos.x < 0 || proj.pos.x > boardWidth || proj.pos.y < 0 || proj.pos.y > boardHeight) {
-      projectiles.splice(i, 1); // Remove the projectile
-    }
+  const userId = socket.handshake.query.userId;
+
+  if (!userId) {
+    console.error(`No userId provided for gameNamespace connection, socket ID ${socket.id}`);
+    socket.disconnect();
+    return;
   }
-}
+  console.log('Game user connected with ID ', userId)
 
-function dealWithDeaths() {
-  // Checks and deals with deaths by collision with bullets 
-  // Iterate over the projectiles, from the last to the first 
-  for(let i = projectiles.length - 1; i >= 0; i--) {
-    // Get a projectile
-    const proj = projectiles[i];
-    const projOwner = proj.ownerId;
+  // Check if there are already two active players
+  if(activeOneVsOnePlayers >= 2) {
+    // Treat as a spectator
+    console.log(`User ${userId} joined as spectator.`);
+    oneVsOneSpectators[userId] = socket;
 
-    // Iterate over the players
-    Object.keys(players).forEach(playerId => {
-      // Select a player
-      const player = players[playerId];
-      
-      // Measure distance between player and projectile
-      const distance = Math.hypot(proj.pos.x - player.pos.x, proj.pos.y - player.pos.y);
+    // To avoid deep recursion errors, pass the spectatorsIds only
+    const spectatorsIds = Object.keys(oneVsOneSpectators);
+    oneVsOneNamespace.emit('updateSpectators', spectatorsIds);
 
-      // Poderia usar a formula euclidiana, mas acho que  Math.hypot parece mais performático?
-      // Raiz quadrada de (x2 - x1) ao quadrado + (y2 - y1) ao quadrado
-      // const distance = Math.sqrt(
-      //   Math.pow(proj.pos.x - player.pos.x, 2) + Math.pow(proj.pos.y - player.pos.y, 2)
-      // );
+    socket.emit('spectatorMode', {message: 'You are a spectator. Wait for the match to be over!'})
+    // Broadcast current player data and projectiles to the spectator
+    socket.emit('updatePlayers', oneVsOnePlayers);
+    socket.emit('updateProjectiles', projectiles);
 
-      // Check if a distancia entre esses pontos é menor do que o player
-      if(distance < playerRadius) {
-        if(projOwner === playerId) {
-          // Player got hit by their own bullet
-          console.log(`Player ${playerId} committed suicide`);
-          gameNamespace.emit('suicide', { playerId });
-        } else {
-          console.log(`Player ${playerId} was killed by ${projOwner}`);
-          gameNamespace.emit('killed', { killedId: playerId, killerId: projOwner });
-        }
 
-        // Remove o projetil
-        projectiles.splice(i, 1);
-        // creio que não precise emitir o array, já que é feito no loop
-        // io.emit('updateProjectiles', projectiles);
 
-      }
-    })
+    // Handle spectator disconnection
+    socket.on('disconnect', () => {
+      console.log(`Spectator ${userId} disconnected.`);
+      delete oneVsOneSpectators[userId];
+    });
+
+    return;
   }
-}
+  // Treat like a player
+  // If there is room, player becomes active
+  console.log(`User ${userId} joined as a player.`);
+  
+  // Increment active player count when a player connects
+  activeOneVsOnePlayers++;
 
-function dealWithPlayerCollisions() {
-  // Checks player to player collision
-  const playerIds = Object.keys(players);
-  // Iterate over the players in a 2d loop
-  for(let i = 0; i < playerIds.length; i++) {
-
-    for(let j = i + 1; j < playerIds.length; j++) {
-      // Get player A and player B
-      const playerA = players[playerIds[i]];
-      const playerB = players[playerIds[j]];
-
-      const distance = Math.hypot(
-        playerA.pos.x - playerB.pos.x,
-        playerA.pos.y - playerB.pos.y
-      );
-
-      // Hardcoded player radius
-
-      if(distance < playerRadius * 2) {
-        // Detected collision   
-        // Previne que um jogador fique por cima do outro (overlap), atualizando a posição
-        const overlap = (playerRadius * 2) - distance;
-
-        // Calculate displacement to resolve the collision
-        const dx = (playerB.pos.x - playerA.pos.x) / distance;
-        const dy = (playerB.pos.y - playerA.pos.y) / distance;
-
-        // Adjust positions to resolve collision
-        playerA.pos.x -= dx * overlap / 2;
-        playerA.pos.y -= dy * overlap / 2;
-        playerB.pos.x += dx * overlap / 2;
-        playerB.pos.y += dy * overlap / 2;
-      }
-    }
-  }
-}
-
-// Game Init
-gameNamespace.on('connection', (socket) => {
-  // Generate a unique user ID
-  const userId = uuid.v4();
-  console.log('User connected with ID', userId);
+  // Start the game loop if this is the first player
+  startGameLoop(oneVsOnePlayers, projectiles, playerRadius, boardWidth, boardHeight, oneVsOneNamespace);
 
   // Send 'init' event with userId
   // do we really need to emit this?
-  socket.emit('init', { userId });
+  socket.emit('gameInit', { userId });
 
   // Initialize player data for the new connection
-  players[userId] = { pos: { x: 0, y: 0 }, rotation: 0 };
+  oneVsOnePlayers[userId] = { pos: { x: 0, y: 0 }, rotation: 0 };
 
   // Broadcast current player data to the new connection
-  gameNamespace.emit('updatePlayers', players);
+  socket.emit('updatePlayers', oneVsOnePlayers);
 
   // Broadcast current projectiles data to the new connection
-  gameNamespace.emit('updateProjectiles', projectiles);
+  socket.emit('updateProjectiles', projectiles);
 
   // Listen for 'update' events from clients
   socket.on('update', (data) => {
-    if (players[userId]) {
-      players[userId].pos = data.pos;
-      players[userId].rotation = data.rotation; 
-      gameNamespace.emit('updatePlayers', players); // Broadcast updated player data to all clients
+    if (oneVsOnePlayers[userId]) {
+      oneVsOnePlayers[userId].pos = data.pos;
+      oneVsOnePlayers[userId].rotation = data.rotation;
+      // Broadcast updated player data to all clients
+      oneVsOneNamespace.emit('updatePlayers', oneVsOnePlayers); 
     }
   });
 
@@ -161,31 +137,43 @@ gameNamespace.on('connection', (socket) => {
   socket.on('fire', (proj) => {
     // console.log('received fire event ', proj)
     projectiles.push({ ...proj, id: uuid.v4(), ownerId: userId });
-    gameNamespace.emit('updateProjectiles', projectiles);
+    // Broadcast updated projectile data to all cliente
+    oneVsOneNamespace.emit('updateProjectiles', projectiles);
   });
 
   // Handle user disconnection
   socket.on('disconnect', () => {
     console.log(`User ${userId} disconnected`);
-    delete players[userId]; 
-    gameNamespace.emit('updatePlayers', players);
+    delete oneVsOnePlayers[userId];
+    oneVsOneNamespace.emit('updatePlayers', oneVsOnePlayers);
 
     const filteredProjectiles = projectiles.filter(proj => proj.ownerId !== userId);
     // Update the original array
     projectiles.length = 0;
     projectiles.push(...filteredProjectiles);
-    gameNamespace.emit('updateProjectiles', projectiles);
+    oneVsOneNamespace.emit('updateProjectiles', projectiles);
+
+    // Decrement the active player count
+    activeOneVsOnePlayers--;
+    // If there are spectators, promote the first spectator to player
+    if(Object.keys(oneVsOneSpectators).length > 0) {
+      const nextUserId = Object.keys(oneVsOneSpectators)[0];
+      const nextSocket = oneVsOneSpectators[nextUserId];
+
+      // remove spectator
+      delete oneVsOneSpectators[nextUserId];
+      // add player
+      oneVsOnePlayers[nextUserId] =  { pos : { x: 0, y: 0 }, rotation: 0 };
+      nextSocket.emit('gameInit', { userId: nextUserId });
+      oneVsOneNamespace.emit('updatePlayers', oneVsOnePlayers);
+
+      activeOneVsOnePlayers++;
+    }
+    // Stop the game loop if no players are connected
+    stopGameLoop(activeOneVsOnePlayers);
+
   });
 });
-
-
-// Server side Game Loop 
-setInterval(() => {
-  dealWithPlayerCollisions();
-  moveAndCleanProjectiles();
-  dealWithDeaths();
-  gameNamespace.emit('updateProjectiles', projectiles); // Broadcast updated projectiles to all clients
-}, 1000 / 60); // 60 fps lol !
 
 // Start the server
 server.listen(process.env.PORT || 3000, () => {

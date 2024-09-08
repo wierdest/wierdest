@@ -1,14 +1,20 @@
 extends layout
 
 block content
-    div(style="display: flex; justify-content: center; align-items: center; min-height: 80vh; flex-direction: column;")
-        p
-            | This is the lobby.
-            br
-            | There is going to be a list of players in the lobby, waiting to join either room.
-            br
-            | There is going to be selection of two rooms: one for 1 vs 1 and another for 2 vs 2 battles.
-            br
-            | Players are going to be ushered to the game, as it becomes available.
+    script(src="/socket.io/socket.io.js")
+    script(src='/javascripts/lobby-client.js')
+    
+    p(id='status')
+
+    div(style="display: flex; justify-content: flex-start; align-items: center; min-height: 80vh; flex-direction: column;")
+        div
+            h2 Players in Lobby
+            ol(id='playersList')
+        div
+            h2 Select a room
+            select(id="roomSelect")
+                option(value="1vs1") 1 vs 1
+                option(value="2vs2") 2 vs 2
             
-        button(id="enterGameButton" type="button" onclick="location.href='/game/play'") Enter Game
+            button(id="joinGameButton", type="button") Join Game
+        

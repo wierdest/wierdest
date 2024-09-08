@@ -1,5 +1,7 @@
 const io = require('socket.io-client');
 const readline = require('readline');
+const uuid = require('uuid');
+
 
 const WIDTH = 600;
 const HEIGHT = 500;
@@ -61,7 +63,10 @@ const rl = readline.createInterface({
 let clients = [];
 
 function addClient() {
-  const client = io('http://localhost:3000');
+  // Generate an ID
+  const userId = uuid.v4();
+  console.log('USER ID GENERATED ', userId)
+  const client = io('http://localhost:3000/game/play/1vs1', { query: {userId}});
   client.on('connect', () => {
     console.log('Client connected');
     const pos = getRandomPos();

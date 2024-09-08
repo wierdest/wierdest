@@ -2,8 +2,12 @@ document.addEventListener('DOMContentLoaded', () => {
 	const statusElement = document.getElementById('status');
 	const canvasElement = document.getElementById('board');
 	const ctx = canvasElement.getContext('2d');
-	// Connect to our play Namespace
-	const socket = io("/game/play");
+	const playersList = document.getElementById('playersList');
+	const spectatorsList = document.getElementById('spectatorsList');
+	// Connect to our play Namespace after getting the id from the local storage
+	const userId = localStorage.getItem('userId');
+	// extract user id from the local storage
+	const socket = io("/game/play/1vs1", { query: {userId}});
 
 	// Store game's working data in the client side
 	let myId = undefined;
@@ -12,11 +16,14 @@ document.addEventListener('DOMContentLoaded', () => {
 	// Array to store the bullets
 	const projectiles = [];
 	const renderer = new GameRenderer(ctx, canvasElement.width, canvasElement.height);
+	
+	// Array to store the spectators IDs
+	const spectators = [];
 
 	let rotationAngle = 0;
 	const rotationSpeed = 0.05;
 
-	socket.on('init', (data) => {
+	socket.on('gameInit', (data) => {
 		statusElement.textContent = `You're user ${data.userId}`;
 		myId = data.userId;
 	});
@@ -31,10 +38,17 @@ document.addEventListener('DOMContentLoaded', () => {
 			}
 		});
 
-		// apply the date to positions and rotations
+		// apply the date to positions and rotations and the player listS
+		playersList.innerHTML = "";
 		Object.keys(data).forEach(userId => {
 			positions[userId] = data[userId].pos;
 			rotations[userId] = data[userId].rotation;
+
+			const li = document.createElement('li');
+            li.textContent = `Player ID: ${userId}`;
+			playersList.appendChild(li);
+
+
 		});
 	});
 
@@ -43,6 +57,28 @@ document.addEventListener('DOMContentLoaded', () => {
 		projectiles.length = 0;
 		data.forEach(proj => projectiles.push(proj));
 	});
+
+	socket.on('updateSpectators', (data) => {
+		spectatorsList.innerHTML = "";
+		data.forEach(userId => {
+			const li = document.createElement('li');
+            li.textContent = `Player ID: ${userId}`;
+			spectatorsList.appendChild(li);
+
+		})
+	})
+
+	socket.on('suicide', (data) => {
+		console.log('Suicide event received:', data);
+		// handle player suicide here
+	  });
+	  
+	socket.on('killed', (data) => {
+	console.log('Killed event received:', data);
+	// handle player killed here
+	});
+
+	socket.on
 
 	canvasElement.addEventListener('mousemove', (event) => {
 		const rect = canvasElement.getBoundingClientRect();
