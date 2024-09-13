@@ -4,11 +4,12 @@ document.addEventListener('DOMContentLoaded', () => {
 	const ctx = canvasElement.getContext('2d');
 	const playersList = document.getElementById('playersList');
 	const spectatorsList = document.getElementById('spectatorsList');
+	const leaveMatchButton = document.getElementById('leaveMatchButton');
 	// Connect to our play Namespace after getting the id from the local storage
 	const userId = localStorage.getItem('userId');
 	// extract user id from the local storage
 	const socket = io("/game/play/1vs1", { query: {userId}});
-
+	
 	// Store game's working data in the client side
 	let myId = undefined;
 	const positions = {};
@@ -38,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
 			}
 		});
 
-		// apply the date to positions and rotations and the player listS
+		// apply the data to positions and rotations and the player listS
 		playersList.innerHTML = "";
 		Object.keys(data).forEach(userId => {
 			positions[userId] = data[userId].pos;
@@ -47,6 +48,11 @@ document.addEventListener('DOMContentLoaded', () => {
 			const li = document.createElement('li');
             li.textContent = `Player ID: ${userId}`;
 			playersList.appendChild(li);
+
+			if (userId === myId) {
+				// show leave match button
+                leaveMatchButton.style.display = 'block';
+            }
 
 
 		});
@@ -65,20 +71,34 @@ document.addEventListener('DOMContentLoaded', () => {
             li.textContent = `Player ID: ${userId}`;
 			spectatorsList.appendChild(li);
 
+			if (userId === myId) {
+                leaveMatchButton.style.display = 'none'; // Hide the button
+            }
 		})
 	})
 
 	socket.on('suicide', (data) => {
 		console.log('Suicide event received:', data);
 		// handle player suicide here
-	  });
+		// just alert and redirect back to the lobby
+		alert('You committed suicide!');
+		window.location.href = '/game/lobby';
+	});
 	  
 	socket.on('killed', (data) => {
-	console.log('Killed event received:', data);
-	// handle player killed here
+		console.log('Killed event received:', data);
+		// handle player killed here
+		if(data.killedId === myId) {
+			alert('You got killed by ' + data.killerId);
+			window.location.href = '/game/lobby'
+		} else {
+			alert(data.killerId + ' killed ' + data.killedId + ' !');
+		}
 	});
 
-	socket.on
+	leaveMatchButton.addEventListener('click', () => {
+        socket.emit('leaveMatch', { userId: myId });
+    });
 
 	canvasElement.addEventListener('mousemove', (event) => {
 		const rect = canvasElement.getBoundingClientRect();
@@ -88,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
 		socket.emit('update', { pos: { x, y }, rotation: rotationAngle });
 		rotationAngle += rotationSpeed;
 
-		if (rotationAngle >= 2 * Math.PI) {
+		if(rotationAngle >= 2 * Math.PI) {
 			rotationAngle -= 2 * Math.PI; 
 		}
 	});
@@ -140,6 +160,5 @@ document.addEventListener('DOMContentLoaded', () => {
 		draw();
 		requestAnimationFrame(gameLoop);
 	}
-
 	gameLoop();
 });

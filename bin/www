@@ -85,17 +85,16 @@ oneVsOneNamespace.on('connection', (socket) => {
     const spectatorsIds = Object.keys(oneVsOneSpectators);
     oneVsOneNamespace.emit('updateSpectators', spectatorsIds);
 
-    socket.emit('spectatorMode', {message: 'You are a spectator. Wait for the match to be over!'})
     // Broadcast current player data and projectiles to the spectator
     socket.emit('updatePlayers', oneVsOnePlayers);
     socket.emit('updateProjectiles', projectiles);
-
 
 
     // Handle spectator disconnection
     socket.on('disconnect', () => {
       console.log(`Spectator ${userId} disconnected.`);
       delete oneVsOneSpectators[userId];
+      oneVsOneNamespace.emit('updateSpectators', Object.keys(oneVsOneSpectators))
     });
 
     return;
@@ -141,6 +140,47 @@ oneVsOneNamespace.on('connection', (socket) => {
     oneVsOneNamespace.emit('updateProjectiles', projectiles);
   });
 
+  // Listen for 'leaveMatch' event from the client
+  socket.on('leaveMatch', () => {
+    console.log(`User ${userId} left the match and became a spectator.`);
+
+    // Remove the player from the active players list
+    delete oneVsOnePlayers[userId];
+    activeOneVsOnePlayers--;
+
+    // Add the player to the spectators list
+    oneVsOneSpectators[userId] = socket;
+
+    // we need to register a new on disconnect
+    socket.on('disconnect', () => {
+      console.log(`Spectator ${userId} disconnected.`);
+      delete oneVsOneSpectators[userId];
+      oneVsOneNamespace.emit('updateSpectators', Object.keys(oneVsOneSpectators));
+    });
+    
+    // Update all clients
+    oneVsOneNamespace.emit('updatePlayers', oneVsOnePlayers);
+    oneVsOneNamespace.emit('updateSpectators', Object.keys(oneVsOneSpectators));
+
+    // If there are more spectators promote the first to a player 
+    if (activeOneVsOnePlayers < 2 && Object.keys(oneVsOneSpectators).length > 3) {
+      const nextUserId = Object.keys(oneVsOneSpectators)[0];
+      const nextSocket = oneVsOneSpectators[nextUserId];
+
+      // Remove spectator and promote them to player
+      delete oneVsOneSpectators[nextUserId];
+      oneVsOnePlayers[nextUserId] = { pos: { x: 0, y: 0 }, rotation: 0 };
+
+      nextSocket.emit('gameInit', { userId: nextUserId });
+      oneVsOneNamespace.emit('updatePlayers', oneVsOnePlayers);
+
+      activeOneVsOnePlayers++;
+    }
+
+    stopGameLoop(activeOneVsOnePlayers);
+  });
+
+
   // Handle user disconnection
   socket.on('disconnect', () => {
     console.log(`User ${userId} disconnected`);
@@ -155,8 +195,8 @@ oneVsOneNamespace.on('connection', (socket) => {
 
     // Decrement the active player count
     activeOneVsOnePlayers--;
-    // If there are spectators, promote the first spectator to player
-    if(Object.keys(oneVsOneSpectators).length > 0) {
+    // If there are spectators enough, promote the first spectator to player
+    if(Object.keys(oneVsOneSpectators).length > 3) {
       const nextUserId = Object.keys(oneVsOneSpectators)[0];
       const nextSocket = oneVsOneSpectators[nextUserId];
 
